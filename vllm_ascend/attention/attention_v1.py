@@ -689,7 +689,6 @@ class AscendAttentionBackendImpl(AttentionImpl):
         if hasattr(layer, 'quant_method') and use_kv_cache_int8:
             output = output.view(num_tokens, self.num_heads, self.head_size)
         if attn_metadata is not None and attn_metadata.force_pa:
-            print("!!!!!!!!!!PAPAPAPAPAP!!!!!!!!!!!")
             ori_output[:, :, :] = output[:num_tokens, :, :]
         else:
             ori_output[:num_tokens, :, :] = output[:num_tokens, :, :]
