@@ -319,13 +319,15 @@ class NPUModelRunner(LoRAModelRunnerMixin):
                                              self.block_size,
                                              use_mla=self.model_config.use_mla,
                                              use_sparse=self.use_sparse)
-        if torch.version.cann.startswith("8.3"):
+        # Read FORCE_PA_CHUNK environment variable
+        self.force_pa_chunk = envs_ascend.FORCE_PA_CHUNK
+        if torch.version.cann.startswith("8.3") and not self.force_pa_chunk:
             self.attn_mask_builder = AttentionMaskBuilder(
                 self.scheduler_config.max_num_batched_tokens, self.dtype,
                 self.device)
         else:
             self.attn_mask_builder = AttentionMaskBuilder(
-                self.model_config.max_model_len, self.dtype)
+                self.model_config.max_model_len, self.dtype, None, self.force_pa_chunk)
 
         # Set up speculative decoding.
         self.spec_attn_mask = None
@@ -333,6 +335,7 @@ class NPUModelRunner(LoRAModelRunnerMixin):
                                      MtpProposer]] = None
         self.actual_seq_lengths_q: list[int] = []
         self.decode_token_per_req = 1
+
         if self.speculative_config:
             spec_token_num = self.speculative_config.num_speculative_tokens
             assert spec_token_num > 0
@@ -899,7 +902,7 @@ class NPUModelRunner(LoRAModelRunnerMixin):
             return self.attn_mask_builder.get_pooling_mask(self.device)
         # Chunk Prefill situation.
         elif attn_state == AscendAttentionState.ChunkedPrefill and not self.vllm_config.model_config.use_mla and not self.use_sparse:
-            if torch.version.cann.startswith("8.3"):
+            if torch.version.cann.startswith("8.3") and not self.force_pa_chunk:
                 return self.attn_mask_builder.get_splitfuse_attn_mask()
             else:
                 return self.attn_mask_builder.get_splitfuse_attn_mask(
@@ -1497,6 +1500,7 @@ class NPUModelRunner(LoRAModelRunnerMixin):
                 attn_mask=self.attn_mask,
                 spec_attn_mask=self.spec_attn_mask,
                 attn_state=self.attn_state,
+                force_pa=self.force_pa_chunk,
                 enable_dbo_across_dp=enable_dbo,
                 is_only_prefill=bool(np.all(num_valid_tokens != 1)),
                 max_query_len=max_num_scheduled_tokens,
@@ -2297,6 +2301,7 @@ class NPUModelRunner(LoRAModelRunnerMixin):
                     attn_mask=self.attn_mask,
                     spec_attn_mask=self.spec_attn_mask,
                     attn_state=self.attn_state,
+                    force_pa=self.force_pa_chunk,
                     max_query_len=max_query_len,
                     decode_token_per_req=self.decode_token_per_req,
                     cos=self.cos,

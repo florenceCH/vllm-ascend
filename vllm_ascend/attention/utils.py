@@ -14,7 +14,7 @@ class AscendCommonAttentionMetadata:
     """
     Per-batch attention metadata, shared across layers and backends.
     AttentionMetadataBuilder instances use it to construct per-layer metadata.
-    
+
     For many of the tensors we keep both GPU and CPU versions.
     """
 
@@ -57,6 +57,9 @@ class AscendCommonAttentionMetadata:
     spec_attn_mask: torch.Tensor = None
 
     attn_state: Any = None
+
+    force_pa: bool = False
+    """Force PA mode when set to True"""
 
     enable_dbo_across_dp: bool = False
 

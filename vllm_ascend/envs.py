@@ -172,6 +172,9 @@ env_variables: Dict[str, Callable[[], Any]] = {
     # Whether to enable transpose weight and cast format to FRACTAL_NZ.
     "VLLM_ASCEND_ENABLE_NZ":
     lambda: int(os.getenv("VLLM_ASCEND_ENABLE_NZ", 1)),
+    # Force PA mode for chunked prefill
+    "FORCE_PA_CHUNK":
+    lambda: os.getenv("FORCE_PA_CHUNK", "false").lower() == "true",
 }
 
 # end-env-vars-definition

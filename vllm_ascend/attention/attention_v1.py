@@ -134,6 +134,9 @@ class AscendMetadata:
     # Current state of this attention run.
     attn_state: AscendAttentionState = AscendAttentionState.ChunkedPrefill
 
+    # Force PA mode when set to True
+    force_pa: bool = False
+
     # Number of tokens excluding padding.
     num_actual_tokens: int = 0
 
@@ -264,6 +267,7 @@ class AscendAttentionMetadataBuilder:
             slot_mapping=slot_mapping,
             attn_mask=attn_mask,
             attn_state=attn_state,
+            force_pa=common_attn_metadata.force_pa,
             enable_dbo_across_dp=common_attn_metadata.enable_dbo_across_dp)
         return attn_metadata
 
@@ -528,7 +532,7 @@ class AscendAttentionBackendImpl(AttentionImpl):
             attn_metadata.seq_lens = \
                 attn_metadata.seq_lens.to(device=query.device)
 
-        if torch.version.cann.startswith("8.3"):
+        if torch.version.cann.startswith("8.3") and not attn_metadata.force_pa:
             # TODO:The npu_fused_infer_attention_score op is planned to
             # be utilized in a wider range in upcoming versions.
             num_block, block_size, _, _ = self.key_cache.shape  # type: ignore
@@ -673,7 +677,7 @@ class AscendAttentionBackendImpl(AttentionImpl):
                                                    output)
             # Normal V1 situation.
             else:
-                if torch.version.cann.startswith("8.3"):
+                if torch.version.cann.startswith("8.3") and not attn_metadata.force_pa:
                     # npu_fused_infer_attention_score does not support cases
                     # where query.shape[0] != attn_metadata.query_start_loc[-1].
                     # Thus we need unpad it here.
@@ -684,7 +688,10 @@ class AscendAttentionBackendImpl(AttentionImpl):
         # to make in-place change to the output tensor
         if hasattr(layer, 'quant_method') and use_kv_cache_int8:
             output = output.view(num_tokens, self.num_heads, self.head_size)
-        ori_output[:num_tokens, :, :] = output[:num_tokens, :, :]
+        if attn_metadata.force_pa:
+            ori_output[:, :, :] = output[:num_tokens, :, :]
+        else:
+            ori_output[:num_tokens, :, :] = output[:num_tokens, :, :]
         return output.view(num_tokens, self.hidden_size)
 
 
